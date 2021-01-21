@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="zh-cn"><head>
+<meta http-equiv="content-type" content="text/html; charset=UTF-8"><script src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/5499aafcda37a38c5f0000b5.js" async="" type="text/javascript"></script>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta property="wb:webmaster" content="e3d99d90e5fcc9c4">
+
+<title> USB 的 NRZI 编码 - Shawn的技术博客 - 与非博客 - 与非网</title>
+
+<meta name="author" content="与非网,eefocus.com">
+<meta name="generator" content="与非网,eefocus.com">
+<meta name="keywords" content="Shawn的EEFOCUS">
+<meta name="description" content="以下全文转载自 &amp;nbsp; http://galeki.is-programmer.com/posts/10054.html ，觉得写得很易懂，特此转载。这两天继续看 USB 相关的内容，准备用纯软件实现一下 USB 设备传输，为将来的项目打好基础。首先碰到的就是这个 NRZI 编码的问题了，基础太薄弱，看了一上午总算明白了大概。首先，USB 的数据是串行发送的，就像 UART、I2C、SPI 等等，连续的01 信号只通过一根数据线发送给接受者。但是因为发送者和接收者运行的频率不一样，信号的同步就是个问题，比如，接受者接收到了一个持续一段时间的低电平，无法得知这究竟是代表了 5 个 0 还是 1000 个 0。一个解决办法，就是在传输数据信号的同时，附加一个时钟信号，用来同步两端的传输，接受者在时钟信号的辅助下对数据信号采样，就可以正确解析出发送的数据了，比如 I2C 就是这样做的，SDA 来传输数据，SCL 来传输同步时钟：虽然这样解决了问题，但是却需要附加一根时钟信号线来传输时钟。有没有不需要附加的时钟信号，也能保持两端的同步呢？有的，这就是 RZ 编码（Return-to-zero Code），也叫做">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link href="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/bootstrap.css" media="screen" rel="stylesheet" type="text/css">
+<link href="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/font-awesome.css" media="screen" rel="stylesheet" type="text/css">
+<link href="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/custom-front.css" media="screen" rel="stylesheet" type="text/css">
+<link href="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/toper.css" media="screen" rel="stylesheet" type="text/css">
+<link href="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/footer.css" media="screen" rel="stylesheet" type="text/css">
+<link href="http://www.eefocus.com/asset/theme-blogger/image/touch-icon-iphone.png?1423970301" rel="apple-touch-icon">
+<link href="http://www.eefocus.com/asset/theme-blogger/image/touch-icon-ipad.png?1423970301" rel="apple-touch-icon">
+<link href="http://www.eefocus.com/asset/theme-blogger/image/touch-icon-iphone-retina.png?1423970301" rel="apple-touch-icon">
+<link href="http://www.eefocus.com/asset/theme-blogger/image/touch-icon-ipad-retina.png?1423970301" rel="apple-touch-icon">
+<link href="http://www.eefocus.com/asset/custom/image/favicon.ico" rel="shortcut icon">
+
+
+<!--[if lt IE 9]><script type="text/javascript" src="http://static.semidata.info/www.eefocus.com/js/html5shiv.js"></script><![endif]-->
+<!--[if lt IE 9]><script type="text/javascript" src="http://static.semidata.info/www.eefocus.com/js/respond.min.js"></script><![endif]-->
+<script src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/ga.js" async="" type="text/javascript"></script><script type="text/javascript" src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/jquery.js"></script>
+<script type="text/javascript" src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/bootstrap.js"></script>
+<!--[if lt IE 10]><script type="text/javascript" src="http://www.eefocus.com/asset/theme-blogger/js/jPlaceholder.js?1423970301"></script><![endif]-->
+
+
+<style type="text/css">.api-qrcode-panel { position: fixed !important; top: 50% !important; right: 0 !important; margin-right: 0 !important; width: 130px !important; z-index: 2000 !important; font: 12px/1.5 'Microsoft yahei' !important; color: #666 !important; transition: all .3s ease-in-out !important; word-break: break-all !important; word-wrap: break-word !important; text-align: center !important; }.api-qrcode-panel.api-qrcode-panel-show { right: 0 !important; margin-right: 0 !important; }.api-qrcode-panel-inner { position: relative !important; right: -75% !important; transition: all .3s ease-in-out !important; padding: 7px 15px !important; background: #fff !important; }.api-qrcode-panel-inner.api-qrcode-panel-inner-show { right: 0 !important; }.api-qrcode-hd { text-align: left !important; padding: 0 6px !important; overflow: hidden !important; }.api-qrcode-close { float: right !important; cursor: pointer !important; font-size: 14px !important; line-height: 16px !important; font-weight: bold !important; }.api-qrcode-title {}.api-qrcode-bd {}.api-qrcode-img { display: block !important; margin: 0 !important; border: 0 !important; width: 100px !important; height: auto !important; }.api-qrcode-desc { padding: 0 6px !important; }@media (max-width: 480px) { .hidden-xxs { display: none !important; } }</style><script src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/tagjs" async="" type="text/javascript"></script><img src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/a.gif" height="1" width="1" border="0"><img class="imorwtfqvpmkfcruocmr" src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/seg" height="1" width="1" border="0"><img class="imorwtfqvpmkfcruocmr" src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/seg_002" height="1" width="1" border="0"></head>
+<body id="pi-blog" class="pi-locale-zh-cn"><script charset="utf-8" src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/jiathis.htm"></script><link type="text/css" rel="stylesheet" href="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/jiathis_share.css"><iframe style="position: fixed; display: none; opacity: 0;" frameborder="0"></iframe><div style="position: absolute; z-index: 1000000000; display: none; top: 50%; left: 50%; overflow: auto;" class="jiathis_style"></div><div style="position: absolute; z-index: 1000000000; display: none; overflow: auto;" class="jiathis_style"></div><iframe src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/jiathis_utility.htm" style="display: none;" frameborder="0"></iframe>
+
+    
+    <!-- Top bar: include eehub entrance -->
+    <!-- Entrance -->
+<div class="navbar-header-ef">
+    <div class="container">
+        <div class="entrance-brand" style="width:180px;">
+            <a href="http://www.eehub.cn/?utm_campaign=dianzixinxigang&amp;utm_medium=navi&amp;utm_source=eefocus&amp;utm_content=eehub&amp;utm_term=eehub" class="entrance-main-title" target="_blank">电子信息港</a>
+            -
+            <a href="http://www.eefocus.com/" class="entrance-sub-title">与非网
+                <img alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAAKCAYAAAC5Sw6hAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyJpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoV2luZG93cykiIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6MTFDODNDMUVGMTQ5MTFFM0E1OTc5QTQ1MkFBNzBCNDUiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6MTFDODNDMUZGMTQ5MTFFM0E1OTc5QTQ1MkFBNzBCNDUiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDoxMUM4M0MxQ0YxNDkxMUUzQTU5NzlBNDUyQUE3MEI0NSIgc3RSZWY6ZG9jdW1lbnRJRD0ieG1wLmRpZDoxMUM4M0MxREYxNDkxMUUzQTU5NzlBNDUyQUE3MEI0NSIvPiA8L3JkZjpEZXNjcmlwdGlvbj4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4gPD94cGFja2V0IGVuZD0iciI/PkDZohUAAADOSURBVHjalNE7CsJAFIXhGAa0y1p0A77wgUJsNJWVYOUS7NyAnSAoiKioC/ABQhoLwUIrIY1r8Q/cQAiJSQY+wmTOHIaZzMMoaIw95rC19KOKgS6TFY5opixx8wesvaILLOxgJizpYIserrpvwZaSBboxJZbkTO86VCBwRxsn5LAJKeljihae3k8VEnQX6zgji6VvbYgJanj7N6mIo79QwU3KZhhhLK/0CW5Qf+7BDZelrIG8zJ2wsB5zqe6mIgz5OlFBleCZvyjFhX4CDAApPCL1WG/jIAAAAABJRU5ErkJggg==" height="5" width="9">
+            </a>
+
+			<div class="nav-modules-container"><ul class="nav-modules"><li class="nav-module"><a href="http://www.eefocus.com/?utm_campaign=dianzixinxigang&amp;utm_medium=navi&amp;utm_source=eefocus&amp;utm_content=eefocus&amp;utm_term=eefocus" class="nav-module-link" title="看行业资讯，观技术交流" target="_blank"><div class="nav-module-icon"><img src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/eefocus.png" style="max-width:100px;"></div><div class="nav-module-title"><div class="nav-module-name" title="看行业资讯，观技术交流">与非网</div><div class="nav-module-domain">eefocus.com</div></div></a></li><li class="nav-module"><a href="http://www.job4ee.com/?utm_campaign=dianzixinxigang&amp;utm_medium=navi&amp;utm_source=eefocus&amp;utm_content=job4ee&amp;utm_term=job4ee" class="nav-module-link" title="猎专业人才、求职场进阶" target="_blank"><div class="nav-module-icon"><img src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/job4ee.png" style="max-width:100px;"></div><div class="nav-module-title"><div class="nav-module-name" title="猎专业人才、求职场进阶">硬聘网</div><div class="nav-module-domain">job4ee.com</div></div></a></li><li class="nav-module"><a href="http://www.cirmall.com/?utm_campaign=dianzixinxigang&amp;utm_medium=navi&amp;utm_source=eefocus&amp;utm_content=cirmall&amp;utm_termcirmall" class="nav-module-link" title="看别人设计、晒自己方案" target="_blank"><div class="nav-module-icon"><img src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/cirmall.png" style="max-width:100px;"></div><div class="nav-module-title"><div class="nav-module-name" title="看别人设计、晒自己方案">电路城</div><div class="nav-module-domain">cirmall.com</div></div></a></li><li class="nav-module"><a href="http://www.cndzz.com/?utm_campaign=dianzixinxigang&amp;utm_medium=navi&amp;utm_source=eefocus&amp;utm_content=cndzz&amp;utm_term=cndzz" class="nav-module-link" title="汇百家电路、集万件文档" target="_blank"><div class="nav-module-icon"><img src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/cndzz.png" style="max-width:100px;"></div><div class="nav-module-title"><div class="nav-module-name" title="汇百家电路、集万件文档">电路网</div><div class="nav-module-domain">cndzz.com</div></div></a></li><li class="nav-module"><a href="http://url.eefocus.com/xz" class="nav-module-link" title="找器件货源、比供应报价" target="_blank"><div class="nav-module-icon"><img src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/findchips.png" style="max-width:100px;"></div><div class="nav-module-title"><div class="nav-module-name" title="找器件货源、比供应报价">芯情报</div><div class="nav-module-domain">findchips.com</div></div></a></li><li class="nav-module"><a href="http://www.datasheet5.com/?utm_campaign=dianzixinxigang&amp;utm_medium=navi&amp;utm_source=eefocus&amp;utm_content=datasheet5&amp;utm_term=datasheet5" class="nav-module-link" title="查器件信息，下数据手册" target="_blank"><div class="nav-module-icon"><img src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/datasheet5.png" style="max-width:100px;"></div><div class="nav-module-title"><div class="nav-module-name" title="查器件信息，下数据手册">元件库</div><div class="nav-module-domain">datasheet5.com</div></div></a></li><li class="nav-module"><a href="http://www.eeboard.com/?utm_campaign=dianzixinxigang&amp;utm_medium=navi&amp;utm_source=eefocus&amp;utm_content=eeboard&amp;utm_term=eeboard" class="nav-module-link" title="评最新板卡、拆热门产品" target="_blank"><div class="nav-module-icon"><img src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/eeboard.png" style="max-width:100px;"></div><div class="nav-module-title"><div class="nav-module-name" title="评最新板卡、拆热门产品">爱板网</div><div class="nav-module-domain">eeboard.com</div></div></a></li><li class="nav-module"><a href="http://www.moore8.com/?utm_campaign=dianzixinxigang&amp;utm_medium=navi&amp;utm_source=eefocus&amp;utm_content=moore8&amp;utm_term=moore8" class="nav-module-link" title="做行业名师、学专业技能" target="_blank"><div class="nav-module-icon"><img src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/moore8.png" style="max-width:100px;"></div><div class="nav-module-title"><div class="nav-module-name" title="做行业名师、学专业技能">摩尔吧</div><div class="nav-module-domain">moore8.com</div></div></a></li><li class="nav-module"><a href="http://www.znczz.com/?utm_campaign=dianzixinxigang&amp;utm_medium=navi&amp;utm_source=eefocus&amp;utm_content=znczz&amp;utm_term=znczz" class="nav-module-link" title="玩尖端科技、练团队实战" target="_blank"><div class="nav-module-icon"><img src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/car.png" style="max-width:100px;"></div><div class="nav-module-title"><div class="nav-module-name" title="玩尖端科技、练团队实战">智能车</div><div class="nav-module-domain">znczz.com</div></div></a></li><li class="nav-module"><a href="http://www.eda365.com/?utm_campaign=dianzixinxigang&amp;utm_medium=navi&amp;utm_source=eefocus&amp;utm_content=eda&amp;utm_term=eda" class="nav-module-link" title="EDA365电子工程师论坛" target="_blank"><div class="nav-module-icon"><img src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/eda.png" style="max-width:100px;"></div><div class="nav-module-title"><div class="nav-module-name" title="EDA365电子工程师论坛">EDA365</div><div class="nav-module-domain">eda365.com</div></div></a></li><li class="nav-module"><a href="http://www.eehub.cn/?utm_campaign=dianzixinxigang&amp;amp;utm_medium=navi&amp;amp;utm_source=eefocus&amp;amp;utm_content=eehub&amp;amp;utm_term=eehub" class="nav-module-link" title="" target="_blank"><div class="nav-module-icon"><img src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/home.png" style="max-width:100px;"></div><div class="nav-module-title"><div class="nav-module-name" title="">首页</div><div class="nav-module-domain">eehub.cn</div></div></a></li><li class="nav-module"><a href="http://www.eehub.cn/?site=default#/navigation/customize" style="display:block;border: 1px dashed #D0D0D0;margin: 10px 20px;padding: 25px 20px;cursor:pointer"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABsAAAAbCAYAAACN1PRVAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyRpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoTWFjaW50b3NoKSIgeG1wTU06SW5zdGFuY2VJRD0ieG1wLmlpZDo0QjIyNTQwNzE1NTIxMUU0QTkxNkE5MDBFRkQwMDU1OCIgeG1wTU06RG9jdW1lbnRJRD0ieG1wLmRpZDo0QjIyNTQwODE1NTIxMUU0QTkxNkE5MDBFRkQwMDU1OCI+IDx4bXBNTTpEZXJpdmVkRnJvbSBzdFJlZjppbnN0YW5jZUlEPSJ4bXAuaWlkOjRCMjI1NDA1MTU1MjExRTRBOTE2QTkwMEVGRDAwNTU4IiBzdFJlZjpkb2N1bWVudElEPSJ4bXAuZGlkOjRCMjI1NDA2MTU1MjExRTRBOTE2QTkwMEVGRDAwNTU4Ii8+IDwvcmRmOkRlc2NyaXB0aW9uPiA8L3JkZjpSREY+IDwveDp4bXBtZXRhPiA8P3hwYWNrZXQgZW5kPSJyIj8+WT296QAAAPRJREFUeNpi/P//PwOxoKKhZw6QkoJyn3U0lKQwkABYSFEMdJYMEleGgURAkmUMJIQC5T6jq2UMDHS07N/wDcb/QycYGUFBU1DZCrKUgwj1a9D4IUTo+TGhvfoP3GdAFy8BUgJkOHYNEWo+AHEEwrL//wUYaAcEUOLs3///DPQAYMsUZKV43rz78JOQ4s+fv/xG5vPy8rAS0iMmIsSBkkCA4ApSaY4TZBXXn0LmT+ttNCPCQ4+BWB856esQmfR3oAkJDY8S5N/wrWJGLRtyljEMpTYIEymKZaUluUBBCcIgNlmVJwngBhCrQNl3gFiDFM0AAQYApRFoJ41o9WsAAAAASUVORK5CYII="></a></li></ul></div>
+        </div><div style="display: none;" id="entrance-mobile" class="entrance-mobile">             <div style="max-height: 44px; cursor: pointer;" class="entrance-sub-title">               <img class="phone-icon" src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/mobile-icon.png">               <span class="copywriting">移动客户端</span>               <img alt="" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABIAAAAKCAYAAAC5Sw6hAAAAGXRFWHRTb2Z0d2FyZQBBZG9iZSBJbWFnZVJlYWR5ccllPAAAAyJpVFh0WE1MOmNvbS5hZG9iZS54bXAAAAAAADw/eHBhY2tldCBiZWdpbj0i77u/IiBpZD0iVzVNME1wQ2VoaUh6cmVTek5UY3prYzlkIj8+IDx4OnhtcG1ldGEgeG1sbnM6eD0iYWRvYmU6bnM6bWV0YS8iIHg6eG1wdGs9IkFkb2JlIFhNUCBDb3JlIDUuMy1jMDExIDY2LjE0NTY2MSwgMjAxMi8wMi8wNi0xNDo1NjoyNyAgICAgICAgIj4gPHJkZjpSREYgeG1sbnM6cmRmPSJodHRwOi8vd3d3LnczLm9yZy8xOTk5LzAyLzIyLXJkZi1zeW50YXgtbnMjIj4gPHJkZjpEZXNjcmlwdGlvbiByZGY6YWJvdXQ9IiIgeG1sbnM6eG1wPSJodHRwOi8vbnMuYWRvYmUuY29tL3hhcC8xLjAvIiB4bWxuczp4bXBNTT0iaHR0cDovL25zLmFkb2JlLmNvbS94YXAvMS4wL21tLyIgeG1sbnM6c3RSZWY9Imh0dHA6Ly9ucy5hZG9iZS5jb20veGFwLzEuMC9zVHlwZS9SZXNvdXJjZVJlZiMiIHhtcDpDcmVhdG9yVG9vbD0iQWRvYmUgUGhvdG9zaG9wIENTNiAoV2luZG93cykiIHhtcE1NOkluc3RhbmNlSUQ9InhtcC5paWQ6MTFDODNDMUVGMTQ5MTFFM0E1OTc5QTQ1MkFBNzBCNDUiIHhtcE1NOkRvY3VtZW50SUQ9InhtcC5kaWQ6MTFDODNDMUZGMTQ5MTFFM0E1OTc5QTQ1MkFBNzBCNDUiPiA8eG1wTU06RGVyaXZlZEZyb20gc3RSZWY6aW5zdGFuY2VJRD0ieG1wLmlpZDoxMUM4M0MxQ0YxNDkxMUUzQTU5NzlBNDUyQUE3MEI0NSIgc3RSZWY6ZG9jdW1lbnRJRD0ieG1wLmRpZDoxMUM4M0MxREYxNDkxMUUzQTU5NzlBNDUyQUE3MEI0NSIvPiA8L3JkZjpEZXNjcmlwdGlvbj4gPC9yZGY6UkRGPiA8L3g6eG1wbWV0YT4gPD94cGFja2V0IGVuZD0iciI/PkDZohUAAADOSURBVHjalNE7CsJAFIXhGAa0y1p0A77wgUJsNJWVYOUS7NyAnSAoiKioC/ABQhoLwUIrIY1r8Q/cQAiJSQY+wmTOHIaZzMMoaIw95rC19KOKgS6TFY5opixx8wesvaILLOxgJizpYIserrpvwZaSBboxJZbkTO86VCBwRxsn5LAJKeljihae3k8VEnQX6zgji6VvbYgJanj7N6mIo79QwU3KZhhhLK/0CW5Qf+7BDZelrIG8zJ2wsB5zqe6mIgz5OlFBleCZvyjFhX4CDAApPCL1WG/jIAAAAABJRU5ErkJggg==" height="5" width="9">             </div>             <div class="nav-mobile-modules-container">                 <div class="modules-body">                     <div class="modules-one border-one">                       <a href="http://www.eefocus.com/hardware-assistant" target="_blank">                         <div class="app-modules">                             <div class="app-helper"></div>                             <div class="modules-info">                                 <div class="info-title">硬件助手</div>                                 <div class="info-title-ins">电子工程师的必备APP</div>                             </div>                         </div>                       </a>                         <div class="helper-app-codes">                             <div class="code-ios">                                 <img src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/helper-app.png">                                 <a href="https://itunes.apple.com/cn/app/ying-jian-zhu-shou/id773044976?mt=8" target="_blank">                                     <div class="down-ios-link"></div>                                 </a>                             </div>                             <div class="code-andr">                                 <img src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/helper-android.png">                                 <a href="http://www.eefocus.com/data/mobile/download/HardwareAssistant.apk" target="_blank">                                     <div class="down-andr-link"></div>                                 </a>                             </div>                         </div>                     </div>                     <div class="modules-one border-one">                         <div class="app-modules">                             <div class="app-buyer"></div>                             <div class="modules-info">                                 <div class="info-title">买芯片</div>                                 <div class="info-title-ins">40家分销商实时数据查询</div>                             </div>                         </div>                         <div class="buyer-app-codes">                             <div class="code-ios">                                 <img src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/buyer-app.png">                                 <a href="https://itunes.apple.com/cn/app/mai-xin-pian/id910377165?mt=8" target="_blank">                                     <div class="down-ios-link"></div>                                 </a>                             </div>                             <div class="code-andr">                                 <img src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/buyer-android.png">                                 <a href="http://www.eefocus.com/data/mobile/download/findchips.apk" target="_blank">                                     <div class="down-andr-link"></div>                                 </a>                             </div>                         </div>                     </div>                     <div class="modules-one">                         <div class="app-modules">                             <div class="app-moore8"></div>                             <div class="modules-info">                                 <div class="info-title">摩尔吧</div>                                 <div class="info-title-ins">在线视频教程应用</div>                             </div>                         </div>                         <div style="text-align: center;" class="moore8-app-codes">                             <div class="code-ios">                                 <img src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/moore8-app.png">                                 <a href="https://itunes.apple.com/cn/app/ee-shi-pin-jiao-cheng/id791071885?mt=8" target="_blank">                                     <div class="down-ios-link"></div>                                 </a>                             </div>                         </div>                     </div>                 </div>             </div>             <link rel="stylesheet" href="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/entrance-mobile.css">         </div>
+
+
+
+        <!-- Userbar -->
+        <div class="login-in-box">
+            <ul class="nav navbar-nav navbar-right" id="user-bar-anonymous" style="">
+    <li>
+        <a href="http://www.eefocus.com/saml/index/login/?redirect=http%3A%2F%2Fwww.eefocus.com%2Ffml927%2Fblog%2F10-04%2F188267_1412d.html">
+            登录        </a>
+    </li>
+    <li>
+        <a href="http://account.eefocus.com/user/register?app=pi250d&amp;redirect=http%3A%2F%2Fwww.eefocus.com%2Ffml927%2Fblog%2F10-04%2F188267_1412d.html">
+            注册        </a>
+    </li>
+</ul>
+<ul class="nav navbar-nav navbar-right" id="user-bar-member" style="display: none;">
+    <li>
+        <a id="member-profile" href="#" title="资料">
+            资料        </a>
+    </li>
+    <li>
+         <a id="member-message" href="#" title="私信">
+            私信        </a>
+    </li>
+    <li>
+        <a id="member-logout" href="http://www.eefocus.com/saml/index/logout/?redirect=http%3A%2F%2Fwww.eefocus.com%2Ffml927%2Fblog%2F10-04%2F188267_1412d.html">
+            退出        </a>
+    </li>
+</ul>
+<script>
+    $.getJSON("http://www.eefocus.com/system/index/user/?" + new Date().getTime(), function (user) {
+        var ela = $('#user-bar-anonymous');
+        var elm = $('#user-bar-member');
+
+        if (user.uid > 0) {
+            ela.hide();
+            elm.show();
+            $('#member-message').attr('href', user.message);
+            $('#member-profile').attr('href', user.profile).html(user.avatar + ' ' + user.name);
+
+			/*show message number*/
+            $.ajax({
+          	  type: "GET",
+          	  url: "http://account.eefocus.com/message/index/count",
+          	  dataType: "jsonp",
+          	  success:function(data){
+              	  if (data.status == 1 && data.data > 0){
+                  	  var newText = $('#member-message').html() + '('+data.data+')';
+                	  $('#member-message').html(newText);
+              	  }
+          	  }
+          	});
+        } else {
+            ela.show();
+            elm.hide();
+        }
+
+        if ($('.nav-modules-container').length) {
+            var new_script = document.createElement('script');
+            new_script.src = 'http://www.eehub.cn/api/v1/js/navigation-modules?source=eefocus&userId=' + user.uid;
+            $('.nav-modules-container').eq(0).after(new_script);
+        }
+    });
+</script>
+        </div>
+
+        <!-- Search -->
+        <form id="form1" action="http://search.eefocus.com/s" name="form1" class="entrance-search">
+            <input style="overflow: hidden; text-indent: -9999em;" class="ser-img" name="sub" value="1" type="submit">
+            <input id="Text2" class="ser_input entrance-ser-input" gtbfieldid="2" autocomplete="off" name="q" maxlength="100" placeholder="请输关键词" type="text">
+        </form>
+
+
+		<div class="blog-homepage" style="height: 20px;left: 170px;position: relative;top: -30px;width: 200px;">
+			&nbsp;&nbsp;|&nbsp;&nbsp;<a href="http://www.eefocus.com/blog" style="color:#b30322" title="博客首页">博客首页</a>
+		</div>
+    </div>
+</div>
+
+    <!-- Generated by OpenX 2.8.7 -->
+    <script type="text/javascript" src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/spcjs.js"></script>
+    <script type="text/javascript">
+        org.openx.SWFObject.prototype.addParam=function () {
+            this.params[arguments[0]]=arguments[1];
+                    if(!this.params['wmode']){
+                        this.params['wmode']="transparent";
+                    }
+        }
+    </script>
+
+    <!-- Page main content: breadcrumb, flash-messenger, blocks and module content -->
+        <div class="container pi-main-container">
+        <!-- Top head zone -->
+                <div class="pi-zone-0 clearfix">
+            <div class="panel panel-default blog-blogger header">
+    <div class="panel-body"><div class="blogger-header">
+	<div class="blogger-description">
+		<h2 class="pi-ellipsis pi-ellipsis-1">Shawn的技术博客</h2>
+		<p class="pi-ellipsis pi-ellipsis-2"></p>
+	</div>
+	<div class="blogger-qlink pull-right">
+		<a class="btn active" title="博文目录" href="http://www.eefocus.com/fml927/blog">
+			博文目录		</a>
+		<a class="btn" target="_blank" title="关于作者" href="http://account.eefocus.com/user/profile/82037">
+			关于作者		</a>
+		<a class="btn link-blog-manage hide-owner-dom hide" title="博客管理" href="http://www.eefocus.com/blog/myspace/">
+			博客管理		</a>
+		<a class="btn link-my-blog hide" title="我的博客"><i></i></a>
+	</div>
+</div></div></div>
+        </div>
+        
+        <div class="row">
+        			
+            <div class="pi-zone-wrap pi-zone-wrap-bg">
+				<div class="col-xs-3">
+											<div class="pi-zone-1">
+							<div class="panel panel-default blog-blogger box">
+    <div class="panel-body"><div class="blogger-info">
+	<a title="Shawn的技术博客" href="http://www.eefocus.com/fml927/blog">
+		<img class="img-circle" src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/887d8211378264d2222ded9f85cf5cbb.jpg">
+	</a>
+	<h2 class="pi-ellipsis pi-ellipsis-1">fml927</h2>
+	<div class="compose-blog hide-owner-dom hide">
+		<a title="发布博客" href="http://www.eefocus.com/blog/myspace/?act=add" class="btn btn-primary">发布博客</a>
+	</div>
+	<div class="action-group blog-link-color show-owner-dom">
+		<a title="发送消息" target="_blank" href="http://account.eefocus.com/message/index/send/uid-82037"><i class="fa fa-comment"></i>发送消息</a> |
+		<a class="add-friend" title="添加朋友" href="javascript:void(0)"><i class="fa fa-user"></i>添加朋友</a>
+	</div>
+</div></div></div>
+<div class="panel panel-default blog-category list">
+    <div class="panel-heading">
+                        <span class="pi-icon-dot-o"></span>
+                        <div class="pi-panel-heading-inner">博客分类</div>
+                    </div><div class="panel-body"><ul class="pi-blog-category-list">
+				<li>
+		<a class="pi-ellipsis pi-ellipsis-1" title="所有" href="http://www.eefocus.com/fml927/blog">所有					</a>
+
+			</li>
+				<li>
+		<a class="pi-ellipsis pi-ellipsis-1" title="默认" href="http://www.eefocus.com/fml927/blog/cate_2808_0.html">默认						<span class="text-muted"> ( 25 )</span>
+					</a>
+
+			</li>
+				<li>
+		<a class="pi-ellipsis pi-ellipsis-1" title="驱动" href="http://www.eefocus.com/fml927/blog/cate_4566_0.html">驱动						<span class="text-muted"> ( 2 )</span>
+					</a>
+
+			</li>
+				<li>
+		<a class="pi-ellipsis pi-ellipsis-1" title="感悟" href="http://www.eefocus.com/fml927/blog/cate_14257_0.html">感悟						<span class="text-muted"> ( 1 )</span>
+					</a>
+
+			</li>
+	</ul></div></div>
+						</div>
+																<div class="pi-zone-2">
+							<div class="panel panel-default friend-link">
+    <div class="panel-heading">
+                        <span class="pi-icon-dot-o"></span>
+                        <div class="pi-panel-heading-inner">友情链接</div>
+                    </div><div class="panel-body">
+<div class="blog-common-list">
+	<ul>
+					<li>
+				<a href="http://hi.csdn.net/space-180938.html" title="我的CSDN Blog" class="pi-ellipsis pi-ellipsis-1" target="_blank">
+					我的CSDN Blog				</a>
+			</li>
+					<li>
+				<a href="http://www.cnblogs.com/WuCountry/" title="一个嵌入式Linux工程师技术blog" class="pi-ellipsis pi-ellipsis-1" target="_blank">
+					一个嵌入式Linux工程师技术blog				</a>
+			</li>
+					<li>
+				<a href="http://devbean.blog.51cto.com/" title="QT、java、Java script技术博客" class="pi-ellipsis pi-ellipsis-1" target="_blank">
+					QT、java、Java script技术博客				</a>
+			</li>
+			</ul>
+</div>
+</div></div>
+						</div>
+																<div class="pi-zone-3">
+							<div class="panel panel-default blog-newest-article">
+    <div class="panel-heading">
+                        <span class="pi-icon-dot-o"></span>
+                        <div class="pi-panel-heading-inner">最新博文</div>
+                    </div><div class="panel-body">
+<div class="blog-common-list">
+        <ul>
+                <li>
+            <a href="http://www.eefocus.com/liangziusb/blog/15-02/310587_c4ab0.html" title="良子USB2.0开发板（FPGA+2SDRAM+USB2.0）终结版2015" class="pi-ellipsis pi-ellipsis-1" target="_blank">
+                 良子USB2.0开发板（FPGA+2SDRAM+USB2.0）终结版2015            </a>
+        </li>
+                <li>
+            <a href="http://www.eefocus.com/ambiqmicro/blog/15-02/310586_94340.html" title="Ambiq Micro发布4款 Cortex-M4F MCU，功耗比竞争产品低5至10倍" class="pi-ellipsis pi-ellipsis-1" target="_blank">
+                 Ambiq Micro发布4款 Cortex-M4F MCU，功耗比竞争产品低5至10倍            </a>
+        </li>
+                <li>
+            <a href="http://www.eefocus.com/ambiqmicro/blog/15-02/310585_c1b8f.html" title="Ambiq Micro拥有最低功耗的实时时钟芯片RTC" class="pi-ellipsis pi-ellipsis-1" target="_blank">
+                 Ambiq Micro拥有最低功耗的实时时钟芯片RTC            </a>
+        </li>
+                <li>
+            <a href="http://www.eefocus.com/elinker/blog/15-02/310584_48f08.html" title="有乐分析我国接线端子排市场发展短板" class="pi-ellipsis pi-ellipsis-1" target="_blank">
+                 有乐分析我国接线端子排市场发展短板            </a>
+        </li>
+                <li>
+            <a href="http://www.eefocus.com/jameswangsynnex/blog/15-02/310583_f45a9.html" title="阿牛哥笑谈嵌入式开发板之选秀反串跨界" class="pi-ellipsis pi-ellipsis-1" target="_blank">
+                 阿牛哥笑谈嵌入式开发板之选秀反串跨界            </a>
+        </li>
+                <li>
+            <a href="http://www.eefocus.com/ishowtrue/blog/15-02/310582_4a531.html" title="利用ubuntu配置linux下c语言开发环境" class="pi-ellipsis pi-ellipsis-1" target="_blank">
+                 利用ubuntu配置linux下c语言开发环境            </a>
+        </li>
+                <li>
+            <a href="http://www.eefocus.com/otod3r/blog/15-02/310581_fd695.html" title="Xilinx UltraScale+ FPGA 中的 UltraRAM" class="pi-ellipsis pi-ellipsis-1" target="_blank">
+                 Xilinx UltraScale+ FPGA 中的 UltraRAM            </a>
+        </li>
+                <li>
+            <a href="http://www.eefocus.com/jameswangsynnex/blog/15-02/310580_9e0ac.html" title="阿牛哥笑谈嵌入式开发板之十个为什么?" class="pi-ellipsis pi-ellipsis-1" target="_blank">
+                 阿牛哥笑谈嵌入式开发板之十个为什么?            </a>
+        </li>
+                <li>
+            <a href="http://www.eefocus.com/jameswangsynnex/blog/15-02/310579_dae6d.html" title="2015年3月份北京举办的一些重要行业展览会和研讨会" class="pi-ellipsis pi-ellipsis-1" target="_blank">
+                 2015年3月份北京举办的一些重要行业展览会和研讨会            </a>
+        </li>
+                <li>
+            <a href="http://www.eefocus.com/xiaoshaohui5/blog/15-02/310448_6323a.html" title="大家新年快乐" class="pi-ellipsis pi-ellipsis-1" target="_blank">
+                 大家新年快乐            </a>
+        </li>
+            </ul>
+    </div>
+</div></div>
+<div class="panel panel-default widget-blog-left-300-250">
+    <div class="panel-body"><style type="text/css">
+.widget-blog-left-300-250 {margin-top: 20px;margin-bottom:20px;}
+.widget-blog-left-300-250 img {max-width: 100%; height: auto;}</style>
+<script type="text/javascript"><!--// <![CDATA[
+    /* [id436] 与非网主站 -博客左侧（300x250） */
+    OA_show(436);
+// ]]> --></script><noscript><a target='_blank' href='http://gg.eefocus.com/www/delivery/ck.php?n=3c2e4ce'><img border='0' alt='' src='http://gg.eefocus.com/www/delivery/avw.php?zoneid=436&amp;n=3c2e4ce' /></a></noscript></div></div>
+						</div>
+									</div>
+
+				<div class="pi-zone-2-7 col-xs-9">
+						
+						
+												
+						<!-- Module content starts -->
+													<div class="pi-module-content col-md-12">
+								
+<div class="pi-article-module">
+	<div class="article-header">
+		<h2 class="headline"> USB 的 NRZI 编码</h2>
+		<div class="article-meta">
+			<div class="clearfix">
+				<div class="pull-left">
+					2010-04-14 10:40:54				</div>
+				<div class="pull-right">
+					<div class="clearfix article-share">
+						<!-- JiaThis Button BEGIN -->
+						<div class="pull-right jiathis_style">
+							<span class="jiathis_txt">分享：</span>
+							<a title="分享到新浪微博" class="jiathis_button_tsina"><span class="jiathis_txt jtico jtico_tsina"></span></a>
+							<a title="分享到腾讯微博" class="jiathis_button_tqq"><span class="jiathis_txt jtico jtico_tqq"></span></a>
+							<a title="分享到人人网" class="jiathis_button_renren"><span class="jiathis_txt jtico jtico_renren"></span></a>
+							<a href="http://www.jiathis.com/share" class="jiathis jiathis_txt jtico jtico_jiathis" target="_blank"></a>
+						</div>
+						<script type="text/javascript" src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/jia.js" charset="utf-8">
+						</script>
+						<!-- JiaThis Button END -->
+					</div>
+				</div>
+			</div>
+		</div>
+		<div class="article-tags">
+					</div>
+	</div>
+	<div class="clearfix mb10 article-content">
+		<div class="clearfix">
+			<div class="article-body">
+				<p><strong>以下全文转载自 &nbsp; http://galeki.is-programmer.com/posts/10054.html ，觉得写得很易懂，特此转载。<font class="Apple-style-span" color="#000000"><span class="Apple-style-span" style="line-height: 20px;"><br>
+</span></font></strong><span class="Apple-style-span" style="font-family: 'courier new', courier, monospace; ">
+</span></p><div id="article_body" style="font-size: 12px; line-height: 20px; padding-bottom: 35px; text-align: justify; ">
+<div id="article_content">
+<p>这两天继续看 USB 相关的内容，准备用纯软件实现一下 USB 设备传输，为将来的项目打好基础。</p>
+<p>首先碰到的就是这个 NRZI 编码的问题了，基础太薄弱，看了一上午总算明白了大概。</p>
+<hr>
+<p>首先，USB 的数据是串行发送的，就像 UART、I2C、SPI 等等，连续的01 信号只通过一根数据线发送给接受者。</p>
+<p>但是因为发送者和接收者运行的频率不一样，信号的同步就是个问题，比如，接受者接收到了一个持续一段时间的低电平，无法得知这究竟是代表了 5 个 0 还是 1000 个 0。</p>
+<p>一个解决办法，就是在传输数据信号的同时，附加一个时钟信号，用来同步两端的传输，接受者在时钟信号的辅助下对数据信号采样，就可以正确解析出发送的数据了，比如 I2C 就是这样做的，SDA 来传输数据，SCL 来传输同步时钟：</p>
+<p><img alt="" src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/600px-I2C_data_transfer.png" style="border-top-width: 0px; border-right-width: 0px; border-bottom-width: 0px; border-left-width: 0px; border-style: initial; border-color: initial; " height="100" width="600"></p>
+<p>虽然这样解决了问题，但是却需要附加一根时钟信号线来传输时钟。有没有不需要附加的时钟信号，也能保持两端的同步呢？</p>
+<p>有的，这就是 RZ 编码（Return-to-zero Code），也叫做归零编码。</p>
+<p>在 RZ 编码中，正电平代表逻辑 1，负电平代表逻辑 0，并且，每传输完一位数据，信号返回到零电平，也就是说，信号线上会出现 3 种电平：正电平、负电平、零电平：</p>
+<p><img alt="" src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/RZcode.png" style="border-top-width: 0px; border-right-width: 0px; border-bottom-width: 0px; border-left-width: 0px; border-style: initial; border-color: initial; " height="128" width="256"></p>
+<p>从图上就可以看出来，因为每位传输之后都要归零，所以接受者只要在信号归零后采样即可，这样就不在需要单独的时钟信号。实际上， RZ 编码就是相当于把时钟信号用归零编码在了数据之内。这样的信号也叫做自同步（self-clocking）信号。</p>
+<p>这样虽然省了时钟数据线，但是还是有缺点的，因为在 RZ 编码中，大部分的数据带宽，都用来传输“归零”而浪费掉了。</p>
+<p>那么，我们去掉这个归零步骤，NRZ 编码（Non-return-to-zero Code）就出现了，和 RZ 的区别就是 NRZ 是不需要归零的：</p>
+<p><img alt="" src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/NRZcode.png" style="border-top-width: 0px; border-right-width: 0px; border-bottom-width: 0px; border-left-width: 0px; border-style: initial; border-color: initial; " height="128" width="256"></p>
+<p>这样，浪费的带宽又回来了，不过又丧失宝贵的自同步特性了，貌似我们又回到了原点，其实这个问题也是可以解决的，不过待会儿再讲，先看看什么是 NRZI：</p>
+<p>NRZI 编码（Non-Return-to-Zero Inverted Code）和 NRZ 的区别就是 NRZI 用信号的翻转代表一个逻辑，信号保持不变代表另外一个逻辑。</p>
+<p>USB 传输的编码就是 NRZI 格式，在 USB 中，电平翻转代表逻辑 0，电平不变代表逻辑1：</p>
+<p><img src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/nrzi.gif" alt="" style="border-top-width: 0px; border-right-width: 0px; border-bottom-width: 0px; border-left-width: 0px; border-style: initial; border-color: initial; " height="234" width="417"></p>
+<p>翻转的信号本身可以作为一种通知机制，而且可以看到，即使把 NRZI 的波形完全翻转，所代表的数据序列还是一样的，对于像 USB 这种通过差分线来传输的信号尤其方便~</p>
+<p>现在再回到那个同步问题：</p>
+<p>的确，NRZ 和 NRZI 都没有自同步特性，但是可以用一些特殊的技巧解决。</p>
+<p>比如，先发送一个同步头，内容是 0101010 的方波，让接受者通过这个同步头计算出发送者的频率，然后再用这个频率来采样之后的数据信号，就可以了。</p>
+<p>在 USB 中，每个 USB 数据包，最开始都有个同步域（SYNC），这个域固定为 0000 0001，这个域通过 NRZI 编码之后，就是一串方波（复习下前面：NRZI 遇 0 翻转遇 1 不变），接受者可以用这个 SYNC 域来同步之后的数据信号。</p>
+<p>此外，因为在 USB 的 NRZI 编码下，逻辑 0 会造成电平翻转，所以接受者在接受数据的同时，根据接收到的翻转信号不断调整同步频率，保证数据传输正确。</p>
+<p>但是，这样还是会有一个问题，就是虽然接受者可以主动和发送者的频率匹配，但是两者之间总会有误差。</p>
+<p>假如数据信号是 1000 个逻辑 1，经过 USB 的 NRZI 编码之后，就是很长一段没有变化的电平，在这种情况下，即使接受者的频率和发送者相差千分之一，就会造成把数据采样成 1001 个或者 999 个 1了。</p>
+<p>USB 对这个问题的解决办法，就是强制插 0，也就是传说中的 bit-stuffing，如果要传输的数据中有 7 个连续的 1，发送前就会在第 6 个 1 后面强制插入一个 0，让发送的信号强制出现翻转，从而强制接受者进行频率调整。</p>
+<p>接受者只要删除 6 个连续 1 之后的 0，就可以恢复原始的数据了。</p>
+<hr>
+<p>关于 NRZI，大致就是如此了，不知道上面所说的有没有错误。其实这种编码的应用非常广泛，比如串口、CD/DVD 和通讯中，今天才见到还真是惭愧啊……</p>
+</div>
+</div>
+<p></p>
+<p>&nbsp;</p>			</div>
+		</div>
+		<div class="clearfix">
+					</div>
+				
+		<div class="blog-detail-action hide-owner-dom hide">
+			<a title="编辑" href="http://www.eefocus.com/blog/article/edit/id-188267"><i class="fa fa-pencil"></i> 编辑</a> &nbsp;|&nbsp;
+			<a title="删除" onclick="return window.confirm('您确定要删除吗？');" href="http://www.eefocus.com/blog/article/delete/id-188267"><i class="fa fa-minus"></i> 删除</a>
+		</div>
+	</div>
+
+	<div class="clearfix article-footer">
+		<div class="article-category pull-left">
+			<label>分类：</label><a title="默认" href="http://www.eefocus.com/fml927/blog/cate_2808_0.html">默认</a>
+		</div>
+		<div class="pull-right article-188267">
+			浏览 ( <span class="visits-count">1290</span> ) |
+			评论 ( <span class="comment-count">2</span> )
+		</div>
+	</div>
+
+	<div class="relate" style="font-size:14px;margin: 20px 0;">
+		
+			<span>上一篇：</span><a title="驱动开发学习计划 1.0版（书目清单和书的简评）" href="http://www.eefocus.com/fml927/blog/10-05/189888_5b89f.html">驱动开发学习计划 1.0版（书目清单和书的简评）</a>
+			&nbsp;|&nbsp;
+			<span>下一篇：</span><a title=" Windows驱动开发工具 WDK 学习笔记（1）" href="http://www.eefocus.com/fml927/blog/10-03/187494_2615c.html"> Windows驱动开发工具 WDK 学习笔记（1）</a>
+				</div>
+
+	<div class="gg clearfix text-center" style="margin-top: 20px; margin-bottom: 20px;">
+		<script type="text/javascript"><!--// <![CDATA[
+			/* [id16] 与非网_底部矩形广告位（640×80） */
+			OA_show(16);
+			// ]]> --></script><noscript><a target='_blank' href='http://gg.eefocus.com/www/delivery/ck.php?n=d4f1bf5'><img border='0' alt='' src='http://gg.eefocus.com/www/delivery/avw.php?zoneid=16&amp;n=d4f1bf5' /></a></noscript>
+	</div>
+	<div class="clearfix">
+		<div class="comment-info text-center">
+			<span class="comment-title">以下网友评论只代表个人观点，不代表本网站的观点或立场</span>
+		</div>
+		<div id="pi-comment-lead" style=""><div class="panel panel-default" id="comments">
+    <div class="panel-heading">
+        全部评论 
+        <strong>(2)</strong>
+    </div>
+    <div class="panel-body">
+        <div class="comment-item" id="js-comment-form">
+    <textarea placeholder="请发表评论……" class="form-control js-comment-txt" rows="3"></textarea>
+    <div class="hide clearfix comment-form">
+        <form action="/comment-blog/post/submit/" method="POST" name="comment-post" id="comment-post">        <div class="form-group">
+            <textarea placeholder="请发表评论……" name="content" id="post-content" class="form-control control-word" data-size="0" rows="3"></textarea>
+        </div>
+        <input name="id" value="" type="hidden"><input name="root" value="188267" type="hidden"><input name="reply" value="" type="hidden"><input name="module" value="" type="hidden"><input name="type" value="" type="hidden"><input name="item" value="" type="hidden"><input name="redirect" value="http%3A%2F%2Fwww.eefocus.com%2Ffml927%2Fblog%2F10-04%2F188267_1412d.html" type="hidden"><input name="markup" value="text" type="hidden">        <div class="pull-right js-comment-btn">
+            <button class="btn btn-primary">
+                发表评论            </button>
+        </div>
+    </form></div>
+        <div class="hide well well-sm">
+        请<a href="http://www.eefocus.com/saml/index/login/?redirect=http%3A%2F%2Fwww.eefocus.com%2Ffml927%2Fblog%2F10-04%2F188267_1412d.html">登录</a>后发表评论    </div>
+</div>
+<div class="comment-item hide" id="js-comment-form-reply" style="margin-top:8px;">
+	<div class="clearfix comment-form">
+		<form action="/comment-blog/post/submit/" method="POST" name="comment-post" id="comment-post">		<div class="form-group">
+			<textarea placeholder="请发表评论……" name="content" class="form-control control-word" data-size="0" rows="3"></textarea>
+		</div>
+		<input name="id" value="" type="hidden"><input name="root" value="188267" type="hidden"><input name="reply" value="" type="hidden"><input name="module" value="" type="hidden"><input name="type" value="" type="hidden"><input name="item" value="" type="hidden"><input name="redirect" value="http%3A%2F%2Fwww.eefocus.com%2Ffml927%2Fblog%2F10-04%2F188267_1412d.html" type="hidden"><input name="markup" value="text" type="hidden">		<div class="pull-right js-comment-btn">
+			<button class="btn btn-primary">
+				回复			</button>
+		</div>
+	</form></div>
+		<div class="hide well well-sm">
+		请<a href="http://www.eefocus.com/saml/index/login/?redirect=http%3A%2F%2Fwww.eefocus.com%2Ffml927%2Fblog%2F10-04%2F188267_1412d.html">登录</a>后发表评论	</div>
+</div>
+
+
+<div class="pi-status active js-video-status" data-id="">
+    <div class="pi-status-director"></div>
+</div>
+
+                        <div class="media comment-item" id="comment-34341">
+            <a class="pull-left" href="http://www.eefocus.com/" target="_blank">
+                <img src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/normal.png" alt="" width="46">            </a>
+            <div class="media-body">
+                
+                    <div class="media-heading">
+                        <a href="http://www.eefocus.com/" target="_blank" style="margin-right: 20px;">访客</a>
+                        <span class="muted">2013-09-26 14:50:02</span>
+                    </div>
+                    <p>请的很好。
+                                    </p><div class="comment-operation">
+                                    </div>
+				<div class="media-reply"></div>
+
+				            </div>
+        </div>
+                <div class="media comment-item" id="comment-34340">
+            <a class="pull-left" href="http://www.eefocus.com/" target="_blank">
+                <img src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/normal.png" alt="" width="46">            </a>
+            <div class="media-body">
+                
+                    <div class="media-heading">
+                        <a href="http://www.eefocus.com/" target="_blank" style="margin-right: 20px;">访客</a>
+                        <span class="muted">2011-02-24 11:28:42</span>
+                    </div>
+                    <p>不错啊，了解了
+                                    </p><div class="comment-operation">
+                                    </div>
+				<div class="media-reply"></div>
+
+				            </div>
+        </div>
+                <a href="http://www.eefocus.com/comment-blog/list/188267" class="btn btn-default btn-block" style="margin-top: 10px;">
+            查看全部评论        </a>
+            </div>
+</div>
+</div>
+<script>
+    $.getJSON("/comment-blog/index/load/", {
+        uri: $(location).attr('href'),
+        time: new Date().getTime()
+    })
+    .done(function (data) {
+        if (data.content) {
+            var el = $('#pi-comment-lead');
+            el.show().html(data.content);
+        }
+    });
+</script>	</div>
+</div>
+
+<script>
+	var url = '/blog/homepage/stats/uid-82037/ids-188267/do-54ede24254149';
+	$.get(url, function(data) {
+		if (data.islogin == 1) {
+			$('.hide-owner-dom').removeClass('hide');
+		} else if (data.islogin == 2) {
+			$('.link-my-blog').removeClass('hide').attr('href', data.link);
+			$('.show-owner-dom').removeClass('hide');
+		} else {
+			$('.show-owner-dom').removeClass('hide');
+		}
+		if (data.articles) {
+			$.each(data.articles, function(){
+				$(".article-" + this.id + " .visits-count").html(this.visits);
+				$(".article-" + this.id + " .comment-count").html(this.comment);
+			});
+		}
+	}, 'json');
+
+	/*
+	var url2 = '/blog/homepage/count/id-188267';
+	$.get(url2, function(result) {});
+	*/
+</script>
+							</div>
+												<!-- Module content ends -->
+
+						
+						
+																		
+						
+																							</div>
+                </div>
+            </div>
+        
+		
+        
+        <!-- Bottom foot zone -->
+            </div>
+
+    <!-- Footer: sitelink -->
+    <div class="footer pi-footer text-center">
+    	<script src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/qrcode"></script>
+        <div class="container">
+            <div>
+	<a href="http://www.eefocus.com/corp/aboutEefocus.html" title="关于我们">关于我们</a> |
+	<a href="http://www.eefocus.com/corp/contact.html" title="联系我们">联系我们</a> |
+	<a href="http://www.eefocus.com/corp/EefocusHr.html" title="加入我们">加入我们</a> |
+	<a href="http://www.eefocus.com/corp/OnlineService.html" title="客户服务">客户服务</a> |
+	<a href="http://www.eefocus.com/corp/law.html" title="相关法律">相关法律</a> |
+	<a href="http://www.eefocus.com/corp/map.html" title="网站地图">网站地图</a> |
+        <a href="http://www.eefocus.com/page/app/" title="客户端">客户端</a> |
+	<a href="http://www.eefocus.com/corp/link.html=" 友情链接"="">友情链接</a> |
+	<a href="http://www.eefocus.com/feedback/" title="建议指正">建议指正</a> |
+	<a target="_blank" class="mlink" href="http://maker.eefocus.com/" title="创客空间">创客空间</a> |
+	<a target="_blank" href="http://weibo.com/eefocus" class="fc" title="@与非网"><i class="wb-icon"></i>@与非网</a>
+</div>
+<div>
+	旗下网站：
+	<a target="_blank" href="http://www.datasheet5.com/" title="集成电路查询网 datasheet5.com">
+		集成电路查询网 datasheet5.com
+	</a> |
+	<a target="_blank" href="http://www.cndzz.com/" title="电子电路网 cndzz.com">
+		电子电路网 cndzz.com
+	</a> <br>
+	© 2006-2014 与非门科技(北京)有限公司 All Rights Reserved. <br>
+	京ICP证:070212号
+	<a target="_blank" href="http://www.hd315.gov.cn/beian/view.asp?bianhao=010202007052800008">
+		<img src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/biaoshi.gif" height="28" width="25" align="absmiddle" border="0">
+	</a>
+	北京市公安局备案编号：1101033715 京ICP备：10038094号
+</div>        </div>
+    </div>
+
+<script type="text/javascript">
+
+  var _gaq = _gaq || [];
+  _gaq.push(['_setAccount', 'UA-1502657-1']);
+  _gaq.push(['_trackPageview']);
+  _gaq.push(['new._setAccount', 'UA-31944875-8']);
+  _gaq.push(['new._trackPageview']);
+  _gaq.push(['new._setAccount', 'UA-31944875-10']);
+  _gaq.push(['new._trackPageview']);
+  (function() {
+    var ga = document.createElement('script'); ga.type = 'text/javascript'; ga.async = true;
+    ga.src = ('https:' == document.location.protocol ? 'https://ssl' : 'http://www') + '.google-analytics.com/ga.js';
+    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(ga, s);
+  })();
+</script>
+
+<script type="text/javascript">
+var _bdhmProtocol = (("https:" == document.location.protocol) ? " https://" : " http://");
+document.write(unescape("%3Cscript src='" + _bdhmProtocol + "hm.baidu.com/h.js%3F644a837956e91928688d4a74b9917d47' type='text/javascript'%3E%3C/script%3E"));
+</script><script src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/h.js" type="text/javascript"></script>
+
+<!-- Minisite event tracking -->
+<script>
+$(function(){
+	$('.widget-nxp a').click(function(){
+		var url = $(this).attr('href');
+		if (url.indexOf('//url.eefocus.com/')>0){
+			_gaq.push(['_trackEvent','NXP-main','click',url]);
+		}
+	});
+
+	$('.widget-maxim a').click(function(){
+		var url = $(this).attr('href');
+		if (url.indexOf('//url.eefocus.com/')>0){
+			_gaq.push(['_trackEvent','MAXIM-main','click',url]);
+		}
+	});
+})
+</script>
+<script type="text/javascript">
+  (function() {
+    window._pa = window._pa || {};
+    var pa = document.createElement('script'); pa.type = 'text/javascript'; pa.async = true;
+    pa.src = ('https:' == document.location.protocol ? 'https:' : 'http:') + "//tag.perfectaudience.com/serve/5499aafcda37a38c5f0000b5.js";
+    var s = document.getElementsByTagName('script')[0]; s.parentNode.insertBefore(pa, s);
+  })();
+</script>
+
+
+
+<div id="js-api-qrcode-panel" class="api-qrcode-panel hidden-xxs"><div id="js-api-qrcode-panel-inner" class="api-qrcode-panel-inner"><div class="api-qrcode-hd"><span id="js-api-qrcode-close" class="api-qrcode-close">×</span><div class="api-qrcode-title">官方微信</div></div><div class="api-qrcode-bd"><img class="api-qrcode-img" src="USB%20%E7%9A%84%20NRZI%20%E7%BC%96%E7%A0%81%20-%20Shawn%E7%9A%84%E6%8A%80%E6%9C%AF%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E5%8D%9A%E5%AE%A2%20-%20%E4%B8%8E%E9%9D%9E%E7%BD%91_files/eefocus.jpg"><div class="api-qrcode-desc"></div></div></div></div></body></html>
